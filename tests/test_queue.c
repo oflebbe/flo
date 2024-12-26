@@ -54,12 +54,8 @@ void test_queue_single()
     flo_queue_free(q);
 }
 
-void test_queue_multi()
+void test_queue_multi(int queue_size, int worker, int problem)
 {
-    const int queue_size = 100;
-    const int worker = 10;
-    const int problem = 100000;
-
     thrd_t *threads = calloc( worker, sizeof( thrd_t));
     
     flo_queue_t *q = flo_queue_create(queue_size, sizeof(int));
@@ -88,6 +84,9 @@ void test_queue_multi()
 int main()
 {
     test_queue_single();
-    test_queue_multi();
+    test_queue_multi(1,1,100);
+    test_queue_multi(100,10,1000000);
+    test_queue_multi(10,100,1000000);
+    test_queue_multi(100,100,1000000);
     printf("END\n");
 }
