@@ -2,31 +2,17 @@
 #define FLO_FILE_H
 
 #include <stdint.h>
-#include <stdio.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+size_t flo_filesize(FILE fp[static 1]);
+const uint8_t *flo_readfile(const char fn[static 1], size_t sz[static 1]);
+const uint8_t *flo_mapfile(const char fn[static 1], size_t sz[static 1]);
+int flo_unmapfile(const uint8_t buf[static 1], size_t sz);
 
-// file size of FILE
-size_t flo_filesize(FILE *fp);
-
-// read whole file, alloc'ed
-uint8_t *flo_readfile(FILE *fp, size_t *sz);
-
-// mmap while file
-uint8_t *flo_mapfile(FILE *fp, size_t *sz);
-// unmap mmap'ed file 
-int flo_unmapfile(uint8_t *buf, size_t sz);
-
-#ifdef __cplusplus
-}
-#endif
-
-/* ------------------------------------------------------------------------- */
 #ifdef FLO_FILE_IMPLEMENTATION
+#include <stdio.h>
+#include <stdlib.h>
 
-size_t flo_filesize(FILE *fp)
+size_t flo_filesize(FILE fp[static 1])
 {
   int p = fseek(fp, 0, SEEK_END);
   if (p < 0)
@@ -34,65 +20,95 @@ size_t flo_filesize(FILE *fp)
     return 0;
   }
   long pos = ftell(fp);
+  if (pos < 0) {
+    abort();
+  }
   fseek(fp, 0, SEEK_SET);
-  return pos;
+  return (size_t) pos;
 }
 
 // read whole file. returns buffer and size
-uint8_t *flo_readfile(FILE *fin, size_t *sz)
+const uint8_t *flo_readfile(const char fn[static 1], size_t sz[static 1])
 {
-  if (sz == NULL)
+  FILE *fp = fopen(fn, "r");
+  if (!fp)
   {
-    return NULL;
+    return nullptr;
   }
-  if (!fin)
-  {
-    return NULL;
-  }
-
-  size_t pos = *sz = flo_filesize(fin);
+ 
+  size_t pos = *sz = flo_filesize(fp);
   if (*sz == 0)
   {
-    return NULL;
+    return nullptr;
   }
   uint8_t *filebuf = calloc(pos, 1);
   if (!filebuf)
   {
-    return NULL;
+    return nullptr;
   }
 
-  if (pos != fread(filebuf, 1, pos, fin))
+  if (pos != fread(filebuf, 1, pos, fp))
   {
     free(filebuf);
-    return NULL;
+    fclose(fp);
+    return nullptr;
   }
+  fclose(fp);
+  return filebuf;
+}
+#ifdef _WIN32
+#include <windows.h>
+#include <io.h>
+
+const uint8_t *flo_mapfile(const char fn[static 1], size_t sz[static 1])
+{
+  if (!sz)
+  {
+    return nilptr;
+  }
+  FILE *fp = fopen(fin, "r");
+  if (!fp)
+  {
+    return nullptr;
+  }
+ 
+  const size_t pos = *sz = flo_filesize(fp);
+  if (pos == 0) {
+    return nullptr;
+  }
+  const int fd = fileno(fp);
+  fclose( fp);
+  const HANDLE file_handle = (HANDLE)_get_osfhandle(fd);
+  const HANDLE mapping_handle = CreateFileMappingA(file_handle, NULL, PAGE_READONLY, 0, 0, "local_mmap");
+  return (const uint8_t *)MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, 0);
+}
+
+int flo_unmapfile(const uint8_t buf[static 1], size_t sz)
+{
+  return (int)UnmapViewOfFile(buf);
+}
+#else
+  #include <sys/mman.h>
+const uint8_t *flo_mapfile(const char fn[static 1], size_t sz[static 1])
+{
+  FILE *fp = fopen(fn, "r");
+  if (!fp)
+  {
+    return nullptr;
+  }
+ 
+  size_t pos = *sz = flo_filesize(fp);
+
+  int fd = fileno(fp);
+  const uint8_t *filebuf = mmap(NULL, pos, PROT_READ, MAP_PRIVATE, fd, 0);
+  fclose(fp);
   return filebuf;
 }
 
-#include <sys/mman.h>
-#include <stdio.h>
-uint8_t *flo_mapfile(FILE *fin, size_t *sz)
+int flo_unmapfile(const uint8_t buf[static 1], size_t sz)
 {
-
-  if (sz == NULL)
-  {
-    return NULL;
-  }
-  if (!fin)
-  {
-    return NULL;
-  }
-  size_t pos = *sz = flo_filesize(fin);
-
-  int fd = fileno(fin);
-  uint8_t *filebuf = mmap(NULL, pos, PROT_READ, MAP_PRIVATE, fd, 0);
-  return filebuf;
+  return munmap((void *)buf, sz);
 }
-
-int flo_unmapfile(uint8_t *buf, size_t sz)
-{
-  return munmap(buf, sz);
-}
-
+#endif
 #endif
 #endif
