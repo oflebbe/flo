@@ -102,6 +102,11 @@ const uint8_t *flo_mapfile(const char fn[static 1], size_t sz[static 1])
   int fd = fileno(fp);
   const uint8_t *filebuf = mmap(NULL, pos, PROT_READ, MAP_PRIVATE, fd, 0);
   fclose(fp);
+  if (filebuf == MAP_FAILED)
+  {
+    return nullptr;
+  }
+  fclose(fp);
   return filebuf;
 }
 
@@ -112,3 +117,4 @@ int flo_unmapfile(const uint8_t buf[static 1], size_t sz)
 #endif
 #endif
 #endif
+
